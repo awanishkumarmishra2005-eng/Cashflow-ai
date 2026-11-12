@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay invoice</title>
+<style>
+:root{--bg:#eef1f8;--tx:#1c2333;--mut:#6b7285;--ac:#0b5fff;--ok:#14804a}
+@media(prefers-color-scheme:dark){:root{--bg:#10131a;--tx:#e8eaf0;--mut:#9aa1b3}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--tx);font-family:system-ui,sans-serif;perspective:900px}
+#card{width:min(340px,92vw);padding:26px;border-radius:20px;color:#fff;background:linear-gradient(135deg,#0b5fff,#6a2cff);
+ box-shadow:0 25px 50px rgba(11,95,255,.35);transition:transform .1s;transform-style:preserve-3d}
+#card.paid{background:linear-gradient(135deg,#14804a,#20b86a)}
+.sm{font-size:12px;opacity:.8;transform:translateZ(20px)}
+.amt{font-size:42px;font-weight:800;margin:6px 0 14px;transform:translateZ(40px)}
+.pill{display:inline-block;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.2);font-size:12px;transform:translateZ(25px)}
+a.btn{display:block;margin-top:18px;text-align:center;padding:12px;border-radius:12px;background:#fff;color:#0b5fff;font-weight:700;text-decoration:none;transform:translateZ(30px)}
+.c{position:fixed;top:-10px;width:8px;height:12px;animation:f 2.2s linear forwards}
+@keyframes f{to{transform:translateY(105vh) rotate(540deg);opacity:.9}}
+</style></head><body>
+<div id="card">
+  <div class="sm">Invoice #<span id="id"></span> from CashFlow AI</div>
+  <div class="sm" id="client" style="margin-top:10px"></div>
+  <div class="amt" id="amt">...</div>
+  <div class="sm" id="desc"></div>
+  <div style="margin-top:12px"><span class="pill" id="st">Loading</span></div>
+  <a class="btn" id="btn" href="#" style="display:none">Pay securely with PayPal</a>
+</div>
+<script>
+const iid={{ iid }};const card=document.getElementById('card');let was=null;
+document.getElementById('id').textContent=iid;
+const set=(id,t)=>document.getElementById(id).textContent=t;
+document.addEventListener('pointermove',e=>{
+  const x=(e.clientX/innerWidth-.5)*16,y=(e.clientY/innerHeight-.5)*-16;
+  card.style.transform=`rotateX(${y}deg) rotateY(${x}deg)`;});
+function confetti(){for(let i=0;i<60;i++){const d=document.createElement('div');d.className='c';
+  d.style.left=Math.random()*100+'vw';d.style.background=`hsl(${Math.random()*360},85%,60%)`;
+  d.style.animationDelay=Math.random()*.6+'s';document.body.appendChild(d);setTimeout(()=>d.remove(),3200);}}
+async function load(){
+  const r=await fetch('/api/invoice/'+iid);if(!r.ok){set('st','Invoice not found');return;}
+  const i=await r.json();
+  set('client','Billed to '+i.client);set('amt',i.amount+' '+i.currency);set('desc',i.description);
+  const btn=document.getElementById('btn');
+  if(i.status==='PAID'){card.classList.add('paid');set('st','Paid. Thank you!');btn.style.display='none';
+    if(was&&was!=='PAID')confetti();}
+  else{set('st',i.status==='OVERDUE'?'Overdue':'Awaiting payment');
+    if(i.link){btn.href=i.link;btn.style.display='block';}}
+  was=i.status;}
+load();setInterval(load,4000);
+</script></body></html>

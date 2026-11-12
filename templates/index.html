@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CashFlow AI</title>
+<style>
+:root{--bg:#f2f4fa;--card:#fff;--tx:#1c2333;--mut:#6b7285;--ac:#0b5fff;--ok:#14804a;--bad:#c62828;--warn:#b26a00;--bd:#e3e6ee}
+@media(prefers-color-scheme:dark){:root{--bg:#10131a;--card:#1b1f2a;--tx:#e8eaf0;--mut:#9aa1b3;--bd:#2a3040}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:16px 18px;font-weight:800;font-size:19px}
+header span{color:var(--mut);font-weight:400;font-size:13px;margin-left:6px}
+main{display:grid;gap:14px;padding:0 14px 24px;max-width:1100px;margin:auto;grid-template-columns:1fr}
+@media(min-width:800px){main{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px}
+.wide{grid-column:1/-1}
+h3{margin:0 0 10px;font-size:15px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;perspective:800px}
+.stat{text-align:center;padding:14px 6px;border-radius:12px;color:#fff;transition:transform .15s;transform-style:preserve-3d}
+.stat b{display:block;font-size:24px;transform:translateZ(24px)}
+.stat span{font-size:12px;opacity:.9}
+.s1{background:linear-gradient(135deg,#14804a,#20b86a)}.s2{background:linear-gradient(135deg,#b26a00,#f0a020)}.s3{background:linear-gradient(135deg,#c62828,#f0584f)}
+#chat{height:250px;overflow-y:auto;border:1px solid var(--bd);border-radius:10px;padding:8px;margin-bottom:8px}
+.m{margin:6px 0;padding:8px 10px;border-radius:12px;max-width:90%;white-space:pre-wrap;font-size:14px}
+.u{background:var(--ac);color:#fff;margin-left:auto}.a{background:var(--bg)}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+input{flex:1;min-width:0;padding:10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:14px}
+button{padding:9px 12px;border:0;border-radius:8px;background:var(--ac);color:#fff;cursor:pointer;font-size:13px}
+button.g{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;perspective:900px}
+.inv{padding:14px;border-radius:14px;background:var(--bg);border:1px solid var(--bd);transition:transform .12s;transform-style:preserve-3d;border-left:5px solid var(--warn)}
+.inv.PAID{border-left-color:var(--ok)}.inv.OVERDUE{border-left-color:var(--bad)}
+.inv .cl{font-weight:700;transform:translateZ(18px)}.inv .am{font-size:22px;font-weight:800;transform:translateZ(30px)}
+.inv .ds,.inv .du{font-size:12px;color:var(--mut)}
+.tag{font-size:11px;padding:3px 8px;border-radius:99px;background:var(--card);border:1px solid var(--bd)}
+.PAID .tag{color:var(--ok)}.OVERDUE .tag{color:var(--bad)}.PENDING .tag{color:var(--warn)}
+.log{font-size:12px;color:var(--mut);margin:3px 0}
+a{color:var(--ac)}
+.c{position:fixed;top:-10px;width:8px;height:12px;animation:f 2.2s linear forwards;z-index:9}
+@keyframes f{to{transform:translateY(105vh) rotate(540deg)}}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#14804a;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;transition:.3s;z-index:9}
+#toast.on{opacity:1}
+</style></head><body>
+<header>CashFlow AI<span>AI that collects your money (PayPal sandbox)</span></header>
+<main>
+ <div class="card wide"><div class="stats">
+  <div class="stat s1 tilt"><b id="earned">0</b><span>Earned</span></div>
+  <div class="stat s2 tilt"><b id="pending">0</b><span>Pending</span></div>
+  <div class="stat s3 tilt"><b id="overdue">0</b><span>Overdue</span></div>
+ </div></div>
+
+ <div class="card"><h3>Chat with your agent</h3>
+  <div id="chat"></div>
+  <div class="row"><input id="msg" placeholder="Bill Rahul $50 for 2 logos, due Friday"><button onclick="send()">Send</button></div>
+  <div class="row" style="margin-top:6px">
+   <button class="g" onclick="send('Who is overdue? Draft a reminder for each.')">Chase overdue</button>
+   <button class="g" onclick="seed()">Load demo data</button></div>
+ </div>
+
+ <div class="card"><h3>Approvals (you decide)</h3>
+  <div id="approvals" style="font-size:14px">None</div>
+  <h3 style="margin-top:14px">Agent activity</h3><div id="log"></div></div>
+
+ <div class="card wide"><h3>Invoices <span style="font-weight:400;color:var(--mut);font-size:12px">(move your mouse over a card)</span></h3>
+  <div class="cards" id="inv"></div></div>
+</main>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let prev={},first=true;
+function add(cls,t){const d=document.createElement('div');d.className='m '+cls;d.textContent=t;$('chat').appendChild(d);$('chat').scrollTop=1e9;}
+async function send(text){const t=text||$('msg').value.trim();if(!t)return;$('msg').value='';add('u',t);add('a','Thinking...');
+ try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:t})});
+  $('chat').lastChild.textContent=(await r.json()).reply;}catch(e){$('chat').lastChild.textContent='Network error';}
+ load();}
+$('msg').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+async function seed(){await fetch('/api/seed',{method:'POST'});load();}
+async function decide(id,d){await fetch(`/api/approve/${id}/${d}`,{method:'POST'});load();}
+function count(el,to){const from=parseFloat(el.dataset.v||0);el.dataset.v=to;const t0=performance.now();
+ (function step(t){const p=Math.min((t-t0)/600,1);el.textContent=(from+(to-from)*p).toFixed(2).replace(/\.00$/,'');if(p<1)requestAnimationFrame(step);})(t0);}
+function confetti(){for(let i=0;i<60;i++){const d=document.createElement('div');d.className='c';d.style.left=Math.random()*100+'vw';
+ d.style.background=`hsl(${Math.random()*360},85%,60%)`;d.style.animationDelay=Math.random()*.6+'s';document.body.appendChild(d);setTimeout(()=>d.remove(),3200);}}
+function toast(t){$('toast').textContent=t;$('toast').classList.add('on');setTimeout(()=>$('toast').classList.remove('on'),3000);}
+document.addEventListener('pointermove',e=>{const el=e.target.closest('.tilt');
+ document.querySelectorAll('.tilt').forEach(n=>{if(n!==el)n.style.transform='';});
+ if(!el)return;const r=el.getBoundingClientRect();
+ const x=((e.clientX-r.left)/r.width-.5)*18,y=((e.clientY-r.top)/r.height-.5)*-18;
+ el.style.transform=`rotateX(${y}deg) rotateY(${x}deg) scale(1.03)`;});
+async function load(){
+ const j=await (await fetch('/api/state')).json();const s=j.summary;
+ count($('earned'),s.earned);count($('pending'),s.pending);count($('overdue'),s.overdue);
+ j.invoices.forEach(i=>{if(!first&&prev[i.id]&&prev[i.id]!=='PAID'&&i.status==='PAID'){confetti();toast(`${i.client} paid ${i.amount} ${i.currency}`);}prev[i.id]=i.status;});
+ first=false;
+ $('inv').innerHTML=j.invoices.map(i=>`<div class="inv tilt ${i.status}">
+  <div class="row" style="justify-content:space-between"><span class="cl">${esc(i.client)}</span><span class="tag">${i.status}${i.days_late?' '+i.days_late+'d':''}</span></div>
+  <div class="am">${esc(i.amount)} ${esc(i.currency)}</div><div class="ds">${esc(i.description)}</div>
+  <div class="du">Due ${esc(i.due_date||'-')}</div>
+  ${i.order_id&&i.status!=='PAID'?`<a href="/pay/${i.id}" target="_blank">Open client pay page</a>`:''}</div>`).join('')||'<span style="color:var(--mut)">No invoices yet. Ask the agent to bill someone.</span>';
+ $('approvals').innerHTML=j.approvals.length?j.approvals.map(a=>{const d=JSON.parse(a.details);
+  return `<div style="margin-bottom:8px">Invoice #${a.invoice_id}: ${esc(d.percent)}% discount
+  <button onclick="decide(${a.id},'yes')">Approve</button> <button class="g" onclick="decide(${a.id},'no')">Reject</button></div>`;}).join(''):'None';
+ $('log').innerHTML=j.log.map(l=>`<div class="log">${esc(l.ts)} - ${esc(l.tool)}: ${esc(l.detail)}</div>`).join('');}
+load();setInterval(load,15000);
+</script></body></html>
